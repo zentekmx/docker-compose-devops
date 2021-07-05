@@ -13,6 +13,11 @@ services:
         external_url 'http://gitlab.${DOMAIN}'
         nginx['listen_https'] = false
         nginx['listen_port'] = 80
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.gitlab.rule=Host(`gitlab.${DOMAIN}`)"
+    - "traefik.http.routers.gitlab.entrypoints=web"
+    - "traefik.http.services.gitlab.loadbalancer.server.port=80"
 
   jenkins:    
     image: jenkins/jenkins:lts
@@ -26,6 +31,11 @@ services:
     - ${JENKINS_VOLUME_HOME:-jenkins-volume-home}:/var/jenkins_home:Z
     environment:
     - JAVA_OPTS=${JENKINS_JAVAOPTS}
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.jenkins.rule=Host(`jenkins.${DOMAIN}`)"
+    - "traefik.http.routers.jenkins.entrypoints=web"
+    - "traefik.http.services.jenkins.loadbalancer.server.port=80"
 
   nexus:
     image: sonatype/nexus3:3.30.0
@@ -35,6 +45,31 @@ services:
     - ${NEXUS_VOLUME_DATA:-nexus-volume-data}:/nexus-data:Z
     environment:
     - INSTALL4J_ADD_VM_PARAMS
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.nexus.rule=Host(`nexus.${DOMAIN}`)"
+    - "traefik.http.routers.nexus.entrypoints=web"
+    - "traefik.http.services.nexus.loadbalancer.server.port=80"
+
+  ingress:
+    image: traefik:2.4
+    command:
+    - "--log.level=DEBUG"  # disable on prod
+    - "--api.insecure=true"
+    - "--providers.docker=true"
+    - "--providers.docker.exposedbydefault=false"
+    - "--entrypoints.web.address=:80"
+    - "--log.filePath=/var/log/traefik.log"  # disable on prod
+    ports:
+    - "80:80"
+    - "443:443"
+    - "8050:8080"
+    depends_on:
+    - gitlab
+    - nexus
+    - jenkins
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   gitlab-volume-config:
